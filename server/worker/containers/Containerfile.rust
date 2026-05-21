@@ -1,0 +1,21 @@
+FROM rust:1.78-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash curl nano git gosu iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -ms /bin/bash sandbox
+
+RUN mkdir -p /workspace
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+RUN echo "export PATH=/usr/local/cargo/bin:\$PATH" >> /home/sandbox/.bashrc
+
+
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+
+WORKDIR /workspace
+
+ENTRYPOINT ["/entrypoint.sh"]

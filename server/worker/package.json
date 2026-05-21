@@ -1,0 +1,30 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --runInBand --silent",
+    "dev": "concurrently \"nodemon src/index.js\" \"nodemon src/editor.js\"",
+    "start": "concurrently -n \"SERVER,TERMINAL\" -c \"green,blue\" \"node src/index.js\" \"node src/editor.js\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "dockerode": "^4.0.10",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "http-proxy": "^1.18.1",
+    "socket.io": "^4.8.3",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.3.0",
+    "jest": "^30.3.0"
+  }
+}

@@ -1,0 +1,75 @@
+version: "3.9"
+
+volumes:
+  postgres_data:
+  projects_data:   # shared between master and worker
+
+networks:
+  ide_net:
+    driver: bridge
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     johndoe
+      POSTGRES_PASSWORD: randompassword
+      POSTGRES_DB:       mydb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ide_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U johndoe -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # master:
+  #   build:
+  #     context: ./master
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   environment:
+  #     PORT:                   3000
+  #     DATABASE_URL:           postgresql://johndoe:randompassword@db:5432/mydb?schema=public
+  #     JWT_SECRET:             ${JWT_SECRET:-change_this_secret}
+  #     JWT_EXPIRES_IN:         ${JWT_EXPIRES_IN:-1d}
+  #     JWT_REFRESH_SECRET:     ${JWT_REFRESH_SECRET:-change_this_refresh_secret}
+  #     JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+  #     FRONTEND_URL:           ${FRONTEND_URL:-http://localhost:5173}
+  #     PROJECTS_DIR:           /app/projects
+  #   volumes:
+  #     - projects_data:/app/projects
+  #   ports:
+  #     - "3000:3000"
+  #   networks:
+  #     - ide_net
+
+  # worker:
+  #   build:
+  #     context: ./worker
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - master
+  #   environment:
+  #     TERMINAL_PORT: 4000
+  #     EDITOR_PORT:   5000
+  #     PROJECTS_DIR:  /app/projects
+  #     SANDBOX_MODE:  docker
+  #   volumes:
+  #     - projects_data:/app/projects
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   ports:
+  #     - "4000:4000"
+  #     - "5000:5000"
+  #   networks:
+  #     - ide_net

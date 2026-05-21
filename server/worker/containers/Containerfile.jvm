@@ -1,0 +1,18 @@
+FROM eclipse-temurin:21-jdk-jammy
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash curl nano git maven gosu iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -ms /bin/bash sandbox
+
+RUN mkdir -p /workspace
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# RUN echo "export PS1='\w \$ '" >> /home/sandbox/.bashrc
+
+WORKDIR /workspace
+
+ENTRYPOINT ["/entrypoint.sh"]
