@@ -1,7 +1,7 @@
 import { Router } from "express";
 import authRouter from "../../modules/auth/routes/auth.js";
 import templetRouter from "../../modules/templets/routes/templets.js";
-import projectRouter from "../../modules/projects/routes/projects.js";
+import projectRouter from "../../modules/project/routes/projects.js";
 
 const router = Router();
 
