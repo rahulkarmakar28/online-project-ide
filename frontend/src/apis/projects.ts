@@ -40,3 +40,8 @@ export const listTemplatesApi = async (): Promise<string[]> => {
     const { data } = await axiosInstance.get("/api/v1/templates");
     return data?.data ?? [];
 };
+
+export const toggleStarApi = async (projectId: string) => {
+    const { data } = await axiosInstance.patch(`/api/v1/projects/${projectId}/star`);
+    return data;
+};

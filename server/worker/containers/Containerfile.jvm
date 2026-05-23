@@ -11,8 +11,6 @@ RUN mkdir -p /workspace
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# RUN echo "export PS1='\w \$ '" >> /home/sandbox/.bashrc
-
 WORKDIR /workspace
 
 ENTRYPOINT ["/entrypoint.sh"]

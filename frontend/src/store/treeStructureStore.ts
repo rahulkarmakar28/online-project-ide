@@ -2,24 +2,22 @@ import { create } from "zustand";
 import { getProjectTreeApi } from "../apis/projects";
 import { sortTree, TreeNodeData } from "../utils/tree";
 
-interface CreatingNode  { parentPath: string; type: "file" | "folder"; }
-interface RenamingNode  { path: string; name: string; type: string; }
+interface CreatingNode { parentPath: string; type: "file" | "folder"; }
+interface RenamingNode { path: string; name: string; type: string; }
 
 interface TreeStructureStore {
-    projectId:     string | null;
-    treeStructure: TreeNodeData | null;
-    creatingNode:  CreatingNode | null;
-    renamingNode:  RenamingNode | null;
-
-    setProjectId:       (id: string) => void;
-    /** Called with a full tree object to replace the current tree */
-    setTreeStructure:   (tree: TreeNodeData) => void;
-    /** Re-fetch tree from the REST API using the stored projectId */
-    refreshTree:        () => Promise<void>;
-    startCreatingNode:  (parentPath: string, type: "file" | "folder") => void;
-    stopCreatingNode:   () => void;
-    startRenamingNode:  (path: string, name: string, type: string) => void;
-    stopRenamingNode:   () => void;
+    projectId:        string | null;
+    treeStructure:    TreeNodeData | null;
+    creatingNode:     CreatingNode | null;
+    renamingNode:     RenamingNode | null;
+    setProjectId:     (id: string) => void;
+    setTreeStructure: (tree: TreeNodeData) => void;
+    refreshTree:      () => Promise<void>;
+    startCreatingNode:(parentPath: string, type: "file" | "folder") => void;
+    stopCreatingNode: () => void;
+    startRenamingNode:(path: string, name: string, type: string) => void;
+    stopRenamingNode: () => void;
+    resetForProject:  (id: string) => void;
 }
 
 export const useTreeStructureStore = create<TreeStructureStore>((set, get) => ({
@@ -29,8 +27,15 @@ export const useTreeStructureStore = create<TreeStructureStore>((set, get) => ({
     renamingNode:  null,
 
     setProjectId: (id) => set({ projectId: id }),
-
     setTreeStructure: (tree) => set({ treeStructure: tree }),
+
+    // Reset everything when switching projects so old tree never bleeds through
+    resetForProject: (id) => set({
+        projectId:     id,
+        treeStructure: null,
+        creatingNode:  null,
+        renamingNode:  null,
+    }),
 
     refreshTree: async () => {
         const { projectId } = get();
@@ -47,10 +52,8 @@ export const useTreeStructureStore = create<TreeStructureStore>((set, get) => ({
         }
     },
 
-    startCreatingNode: (parentPath, type) =>
-        set({ creatingNode: { parentPath, type } }),
+    startCreatingNode: (parentPath, type) => set({ creatingNode: { parentPath, type } }),
     stopCreatingNode:  () => set({ creatingNode: null }),
-    startRenamingNode: (path, name, type) =>
-        set({ renamingNode: { path, name, type } }),
+    startRenamingNode: (path, name, type) => set({ renamingNode: { path, name, type } }),
     stopRenamingNode:  () => set({ renamingNode: null }),
 }));

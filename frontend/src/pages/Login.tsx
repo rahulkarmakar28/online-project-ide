@@ -64,7 +64,19 @@ const Login = () => {
                                 onChange={handleChange}
                                 placeholder="you@example.com"
                                 required
-                                className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                                className="
+                                    w-full
+                                    bg-gray-100 dark:bg-gray-800
+                                    border border-gray-300 dark:border-gray-600
+                                    rounded-lg
+                                    px-3 py-2.5
+                                    text-sm
+                                    text-gray-900 dark:text-white
+                                    placeholder:text-gray-500 dark:placeholder:text-gray-400
+                                    outline-none
+                                    focus:ring-2 focus:ring-blue-500
+                                    focus:border-blue-500
+                                "
                             />
                         </div>
                         <div>
@@ -78,7 +90,20 @@ const Login = () => {
                                 onChange={handleChange}
                                 placeholder="••••••••"
                                 required
-                                className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                                className="
+                                    w-full
+                                    bg-gray-100 dark:bg-gray-800
+                                    border border-gray-300 dark:border-gray-600
+                                    rounded-lg
+                                    px-3 py-2.5
+                                    text-sm
+                                    text-gray-900 dark:text-white
+                                    placeholder:text-gray-500 dark:placeholder:text-gray-400
+                                    outline-none
+                                    focus:ring-2 focus:ring-blue-500
+                                    focus:border-blue-500
+                                    transition
+                                "
                             />
                         </div>
                         <button

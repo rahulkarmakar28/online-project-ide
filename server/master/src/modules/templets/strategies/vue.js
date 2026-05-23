@@ -2,7 +2,7 @@ import { run, patchPackageJson } from "./_base.js";
 
 export const vueStrategy = {
     devPort: 5173,
-    devCmd:  "npm run dev",
+    devCmd: "npm run dev",
     scaffold: async (projectId, projectPath, projectName) => {
         const folder = projectName || "sandbox";
         await run(
@@ -10,6 +10,7 @@ export const vueStrategy = {
             projectPath,
         );
         await run(`npm install`, `${projectPath}/${folder}`);
+        await run(`chmod -R 777 "${projectPath}/${folder}"`);
         await patchPackageJson(`${projectPath}/${folder}`, {
             dev: "vite --host",
         });

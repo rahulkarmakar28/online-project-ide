@@ -13,18 +13,15 @@ const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
 
-// Read token synchronously from localStorage — no Zustand dependency.
-// Zustand state is in-memory and resets on page refresh, so we can't
-// use it here for the initial auth check.
+
 const getToken = () => localStorage.getItem("token");
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-    return getToken() ? <>{children}</> : <Navigate to="/login" replace />;
-};
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) =>
+    getToken() ? <>{children}</> : <Navigate to="/login" replace />;
 
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-    return getToken() ? <Navigate to="/" replace /> : <>{children}</>;
-};
+const PublicRoute = ({ children }: { children: React.ReactNode }) =>
+    getToken() ? <Navigate to="/" replace /> : <>{children}</>;
+
 
 const App = () => (
     <QueryClientProvider client={queryClient}>

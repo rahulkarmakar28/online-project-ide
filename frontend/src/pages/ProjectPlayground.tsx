@@ -15,6 +15,8 @@ import { BrowserPreview } from "@/components/ide/BrowserPreview";
 import { useTreeStructureStore }  from "@/store/treeStructureStore";
 import { useEditorSocketStore }   from "@/store/editorSocketStore";
 import { useTerminalSocketStore } from "@/store/terminalSocketStore";
+import { useActiveFileTabStore }  from "@/store/activeFileTabStore";
+import { useFileCacheStore }      from "@/store/fileCacheStore";
 import { useThemeApplier }        from "@/hooks/useThemeApplier";
 import { usePortStore }           from "@/store/portStore";
 import { getProjectTreeApi }      from "@/apis/projects";
@@ -29,10 +31,12 @@ const ProjectPlayground = () => {
     const navigate = useNavigate();
     useThemeApplier();
 
-    const { setProjectId, setTreeStructure } = useTreeStructureStore();
+    const { resetForProject, setTreeStructure } = useTreeStructureStore();
     const { setEditorSocket, clearSocket: clearEditor } = useEditorSocketStore();
     const { setTerminalSocket, clearSocket: clearTerminal } = useTerminalSocketStore();
-    const { projects } = useProjectStore();
+    const { resetTabs }  = useActiveFileTabStore();
+    const { resetCache } = useFileCacheStore();
+    const { projects }   = useProjectStore();
     const { port, setPort } = usePortStore();
     const project = projects.find((p) => p.id === projectId);
 
@@ -45,11 +49,17 @@ const ProjectPlayground = () => {
 
     useEffect(() => {
         if (!projectId) { navigate("/"); return; }
+        if (!localStorage.getItem("token")) { navigate("/login"); return; }
 
-        setProjectId(projectId);
+        // ── Reset all stores when switching projects ───────────────────────
+        // This prevents file cache / open tabs from the previous project
+        // bleeding into the new one when the user opens multiple tabs.
+        resetForProject(projectId);
+        resetTabs();
+        resetCache();
         setPort(null);
 
-        let ws:     WebSocket | null         = null;
+        let ws:     WebSocket | null             = null;
         let socket: ReturnType<typeof io> | null = null;
 
         getProjectTreeApi(projectId)
@@ -74,7 +84,6 @@ const ProjectPlayground = () => {
 
                 socket.on("connect", () => {
                     console.log("[editor socket] connected");
-                    // Ask worker for the container's mapped host port
                     socket!.emit("GET_PORT", { containerName: `project-${projectId}` });
                 });
                 socket.on("disconnect", () => console.log("[editor socket] disconnected"));
@@ -86,25 +95,16 @@ const ProjectPlayground = () => {
 
                 // ── Terminal WebSocket ────────────────────────────────────
                 const wsUrl = `${TERMINAL_WS_URL}/terminal?projectId=${encodeURIComponent(projectId)}&template=${encodeURIComponent(resolvedTemplate)}&name=${encodeURIComponent(resolvedName)}`;
-                console.log("[terminal ws] connecting:", wsUrl);
-
                 ws = new WebSocket(wsUrl);
                 ws.onopen  = () => console.log("[terminal ws] connected");
                 ws.onerror = (e) => console.error("[terminal ws] error", e);
                 ws.onclose = () => console.log("[terminal ws] closed");
 
-                // Worker sends { type:"preview-port", port:XXXX } once container starts
                 ws.addEventListener("message", (e) => {
                     try {
-                        const msg = JSON.parse(
-                            typeof e.data === "string" ? e.data : new TextDecoder().decode(e.data)
-                        );
-                        if (msg?.type === "preview-port" && msg.port) {
-                            setPort(Number(msg.port));
-                        }
-                    } catch {
-                        // binary terminal data — ignore JSON parse errors
-                    }
+                        const msg = JSON.parse(typeof e.data === "string" ? e.data : "");
+                        if (msg?.type === "preview-port" && msg.port) setPort(Number(msg.port));
+                    } catch {}
                 });
 
                 setTerminalSocket(ws);
@@ -145,17 +145,13 @@ const ProjectPlayground = () => {
 
             <div className="flex flex-1 overflow-hidden">
                 {sidebarOpen && (
-                    <div
-                        className="w-[48px] min-w-[48px] flex flex-col items-center py-2 gap-1"
-                        style={{ background: "#333333", borderRight: "1px solid #252526" }}
-                    />
+                    <div className="w-[48px] min-w-[48px] flex flex-col items-center py-2 gap-1"
+                        style={{ background: "#333333", borderRight: "1px solid #252526" }} />
                 )}
 
                 {sidebarOpen && (
-                    <div
-                        className="w-60 min-w-[200px] overflow-hidden"
-                        style={{ background: "#252526", borderRight: "1px solid #1e1e1e" }}
-                    >
+                    <div className="w-60 min-w-[200px] overflow-hidden"
+                        style={{ background: "#252526", borderRight: "1px solid #1e1e1e" }}>
                         <FileExplorer />
                     </div>
                 )}
@@ -179,10 +175,7 @@ const ProjectPlayground = () => {
 
                     {browserOpen && (
                         <div className="w-[420px] min-w-[300px]" style={{ borderLeft: "1px solid #252526" }}>
-                            <BrowserPreview
-                                port={port}
-                                onClose={() => setBrowserOpen(false)}
-                            />
+                            <BrowserPreview port={port} onClose={() => setBrowserOpen(false)} />
                         </div>
                     )}
                 </div>

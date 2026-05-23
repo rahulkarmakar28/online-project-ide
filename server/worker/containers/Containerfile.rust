@@ -13,7 +13,6 @@ RUN chmod +x /entrypoint.sh
 
 RUN echo "export PATH=/usr/local/cargo/bin:\$PATH" >> /home/sandbox/.bashrc
 
-
 ENV PATH="/usr/local/cargo/bin:${PATH}"
 
 WORKDIR /workspace

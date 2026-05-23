@@ -12,22 +12,22 @@ import { useProjectStore } from "@/store/projectStore";
 
 
 const TEMPLATE_ICONS: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
-    "react-js":    { icon: <FaReact />,      label: "React JS",    color: "text-[#61dafb]" },
-    "react-ts":    { icon: <SiTypescript />, label: "React TS",    color: "text-[#3178c6]" },
-    "nextjs":      { icon: <FaCode />,       label: "Next.js",     color: "text-foreground" },
-    "vue":         { icon: <SiVuedotjs />,   label: "Vue",         color: "text-[#42b883]" },
-    "angular":     { icon: <SiAngular />,    label: "Angular",     color: "text-[#dd0031]" },
-    "html-css-js": { icon: <FaCode />,       label: "HTML/CSS/JS", color: "text-[#e34c26]" },
-    "nodejs":      { icon: <FaNodeJs />,     label: "Node.js",     color: "text-[#6cc24a]" },
-    "hono":        { icon: <FaCode />,       label: "Hono",        color: "text-[#e36002]" },
-    "python":      { icon: <FaPython />,     label: "Python",      color: "text-[#3776ab]" },
-    "fastapi":     { icon: <SiFastapi />,    label: "FastAPI",     color: "text-[#009688]" },
-    "flask":       { icon: <SiFlask />,      label: "Flask",       color: "text-foreground" },
-    "django":      { icon: <SiDjango />,     label: "Django",      color: "text-[#092e20]" },
-    "spring-boot": { icon: <SiSpring />,     label: "Spring Boot", color: "text-[#6db33f]" },
-    "go":          { icon: <SiGo />,         label: "Go",          color: "text-[#00add8]" },
-    "rust":        { icon: <FaRust />,       label: "Rust",        color: "text-[#dea584]" },
-    "java":        { icon: <FaJava />,       label: "Java",        color: "text-[#e76f00]" },
+    "react-js": { icon: <FaReact />, label: "React JS", color: "text-[#61dafb]" },
+    "react-ts": { icon: <SiTypescript />, label: "React TS", color: "text-[#3178c6]" },
+    "nextjs": { icon: <FaCode />, label: "Next.js", color: "text-foreground" },
+    "vue": { icon: <SiVuedotjs />, label: "Vue", color: "text-[#42b883]" },
+    "angular": { icon: <SiAngular />, label: "Angular", color: "text-[#dd0031]" },
+    "html-css-js": { icon: <FaCode />, label: "HTML/CSS/JS", color: "text-[#e34c26]" },
+    "nodejs": { icon: <FaNodeJs />, label: "Node.js", color: "text-[#6cc24a]" },
+    "hono": { icon: <FaCode />, label: "Hono", color: "text-[#e36002]" },
+    "python": { icon: <FaPython />, label: "Python", color: "text-[#3776ab]" },
+    "fastapi": { icon: <SiFastapi />, label: "FastAPI", color: "text-[#009688]" },
+    "flask": { icon: <SiFlask />, label: "Flask", color: "text-foreground" },
+    "django": { icon: <SiDjango />, label: "Django", color: "text-[#092e20]" },
+    "spring-boot": { icon: <SiSpring />, label: "Spring Boot", color: "text-[#6db33f]" },
+    "go": { icon: <SiGo />, label: "Go", color: "text-[#00add8]" },
+    "rust": { icon: <FaRust />, label: "Rust", color: "text-[#dea584]" },
+    "java": { icon: <FaJava />, label: "Java", color: "text-[#e76f00]" },
 };
 
 const CreateProject = () => {
@@ -36,21 +36,21 @@ const CreateProject = () => {
 
 
     const [templates, setTemplates] = useState<string[]>(Object.keys(TEMPLATE_ICONS));
-    const [selected, setSelected]   = useState("react-js");
-    const [name, setName]           = useState("");
-    const [loading, setLoading]     = useState(false);
-    const [creating, setCreating]   = useState(false);
+    const [selected, setSelected] = useState("react-js");
+    const [name, setName] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [creating, setCreating] = useState(false);
 
     useEffect(() => {
         setLoading(true);
         listTemplatesApi()
             .then((list) => { if (list.length) setTemplates(list); })
-            .catch(() => {/* fallback to hardcoded list */})
+            .catch(() => {/* fallback to hardcoded list */ })
             .finally(() => setLoading(false));
     }, []);
 
     const handleCreate = async () => {
-        const trimmed = name.trim();
+        const trimmed = name.trim().replace(/\s+/g, "_");
         if (!trimmed) { toast.error("Please enter a project name"); return; }
         setCreating(true);
         try {
@@ -58,7 +58,7 @@ const CreateProject = () => {
             console.log(res);
             if (!res.success) { toast.error("Failed to create project"); return; }
             //store it in project store
-            setProjects([...projects, res.data])
+            setProjects([...projects, { ...res.data, starred: false }])
             toast.success("Project created!");
             navigate(`/projects/${res.data.id}`);
         } catch (err: any) {
@@ -92,7 +92,22 @@ const CreateProject = () => {
                         onChange={(e) => setName(e.target.value)}
                         placeholder="my-awesome-project"
                         maxLength={60}
-                        className="w-full bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring mb-6"
+                        className="
+                            w-full
+                            bg-gray-100 dark:bg-gray-800
+                            border border-gray-300 dark:border-gray-600
+                            rounded-lg
+                            px-3 py-2.5
+                            text-sm
+                            text-gray-900 dark:text-white
+                            placeholder:text-gray-500 dark:placeholder:text-gray-400
+                            outline-none
+                            focus:ring-2 focus:ring-blue-500
+                            focus:border-blue-500
+                            transition-all
+                            duration-200
+                            mb-6
+                        "
                     />
 
                     {/* Template grid */}

@@ -15,7 +15,7 @@ axiosInstance.interceptors.request.use((config) => {
 let isRefreshing = false;
 let pendingQueue: Array<{
     resolve: (token: string) => void;
-    reject:  (err: unknown) => void;
+    reject: (err: unknown) => void;
 }> = [];
 
 const flushQueue = (error: unknown, token: string | null = null) => {
@@ -52,13 +52,12 @@ axiosInstance.interceptors.response.use(
             isRefreshing = true;
 
             try {
-                // FIXED: refresh controller returns { data: { token } }
                 const { data } = await axiosInstance.post(
                     `/api/v1/auth/refresh`,
                     {},
                     { withCredentials: true },
                 );
-                const newToken: string = data.data.token; // ← matches refreshController response
+                const newToken: string = data.data.token;
                 localStorage.setItem("token", newToken);
                 axiosInstance.defaults.headers.common.Authorization = `Bearer ${newToken}`;
                 flushQueue(null, newToken);

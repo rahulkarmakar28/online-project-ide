@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --runInBand --silent",
+    "build-images": "bash build-images.sh",
     "dev": "concurrently \"nodemon src/index.js\" \"nodemon src/editor.js\"",
     "start": "concurrently -n \"SERVER,TERMINAL\" -c \"green,blue\" \"node src/index.js\" \"node src/editor.js\""
   },

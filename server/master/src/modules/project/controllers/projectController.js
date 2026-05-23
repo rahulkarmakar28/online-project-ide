@@ -1,60 +1,49 @@
 import {
-    createProjectService,
-    getProjectTreeService,
-    deleteProjectService,
-    listProjectsService,
+    createProjectService, getProjectTreeService,
+    deleteProjectService, listProjectsService, toggleStarService,
 } from "../service/projectService.js";
 
 export const createProjectController = async (req, res, next) => {
     try {
-        const { template, name } = req.body;
-        const userId  = req.user.id;
-        const project = await createProjectService({ userId, template, name });
-        return res.status(201).json({
-            success: true,
-            message: "Project created",
-            data:    project,
-        });
-    } catch (err) {
-        next(err);
+        const project = await createProjectService({ userId: req.user.id, template: req.body.template, name: req.body.name });
+        res.status(201).json({ success: true, message: "Project created", data: project });
+    } catch (e) {
+        next(e);
     }
 };
 
 export const getProjectTreeController = async (req, res, next) => {
     try {
-        console.log("[getProjectTreeController] called with params:", req.params);
-        const { projectId } = req.params;
-        const userId = req.user.id;
-        const data   = await getProjectTreeService({ projectId, userId });
-        return res.status(200).json({
-            success: true,
-            message: "Successfully fetched the tree",
-            data,
-        });
-    } catch (err) {
-        next(err);
+        const data = await getProjectTreeService({ projectId: req.params.projectId, userId: req.user.id });
+        res.status(200).json({ success: true, data });
+    } catch (e) {
+        next(e);
     }
 };
 
 export const deleteProjectController = async (req, res, next) => {
     try {
-        const { projectId } = req.params;
-        const userId = req.user.id;
-        const data   = await deleteProjectService({ projectId, userId });
-        return res
-            .status(200)
-            .json({ success: true, message: "Project deleted", data });
-    } catch (err) {
-        next(err);
+        const data = await deleteProjectService({ projectId: req.params.projectId, userId: req.user.id });
+        res.status(200).json({ success: true, data });
+    } catch (e) {
+        next(e);
     }
 };
 
 export const listProjectsController = async (req, res, next) => {
     try {
-        const userId = req.user.id;
-        const data   = await listProjectsService({ userId });
-        return res.status(200).json({ success: true, data });
-    } catch (err) {
-        next(err);
+        const data = await listProjectsService({ userId: req.user.id });
+        res.status(200).json({ success: true, data });
+    } catch (e) {
+        next(e);
+    }
+};
+
+export const toggleStarController = async (req, res, next) => {
+    try {
+        const data = await toggleStarService({ projectId: req.params.projectId, userId: req.user.id });
+        res.status(200).json({ success: true, data });
+    } catch (e) {
+        next(e);
     }
 };

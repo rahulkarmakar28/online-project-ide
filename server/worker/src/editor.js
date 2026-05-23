@@ -61,7 +61,7 @@ editorNamespace.on("connection", (socket) => {
     };
 
     socket.on("GET_PORT",     () => sendPort("GET_PORT"));
-    socket.on("preview-port", () => sendPort("preview-port"));
+    // socket.on("preview-port", () => sendPort("preview-port"));
 
     // ── File / folder CRUD ────────────────────────────────────────────────
     handleEditorSocketEvents(socket, editorNamespace, projectId);
