@@ -4,7 +4,6 @@ import cors from "cors";
 import { Server } from "socket.io";
 import chokidar from "chokidar";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { EDITOR_PORT } from "./config/serverConfig.js";
 import { handleEditorSocketEvents } from "./socketHandlers/editorHandler.js";
@@ -28,7 +27,7 @@ editorNamespace.on("connection", (socket) => {
     console.log(`[editor] connected  projectId=${projectId}  socket=${socket.id}`);
     socket.join(projectId);
 
-    // ── Chokidar file watcher — one per project ───────────────────────────
+    // ── Chokidar watcher ──────────────────────────────────────────────────
     if (!watchers.has(projectId)) {
         const watchPath = path.resolve(PROJECTS_DIR, projectId);
         const watcher = chokidar.watch(watchPath, {
@@ -41,32 +40,26 @@ editorNamespace.on("connection", (socket) => {
             ignoreInitial:    true,
             awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
         });
-
         watcher.on("all", (event, filePath) => {
             editorNamespace.to(projectId).emit("FileSystemChange", { event, path: filePath });
         });
-
         watchers.set(projectId, { watcher, refCount: 1 });
         console.log(`[watcher] started for ${projectId}`);
     } else {
         watchers.get(projectId).refCount++;
     }
 
-    // ── GET_PORT — frontend sends this event name, we respond with the same ─
-    // Also handle the old "preview-port" name for backward compat
     const sendPort = (name) => {
         const port = getContainerPort(projectId);
-        console.log(`[port] ${name} requested for ${projectId} → ${port}`);
+        console.log(`[port] ${name} for ${projectId} → ${port}`);
         socket.emit("GET_PORT_SUCCESS", { port });
     };
 
     socket.on("GET_PORT",     () => sendPort("GET_PORT"));
-    // socket.on("preview-port", () => sendPort("preview-port"));
+    socket.on("preview-port", () => sendPort("preview-port"));
 
-    // ── File / folder CRUD ────────────────────────────────────────────────
     handleEditorSocketEvents(socket, editorNamespace, projectId);
 
-    // ── Cleanup ───────────────────────────────────────────────────────────
     socket.on("disconnect", async () => {
         console.log(`[editor] disconnected  socket=${socket.id}`);
         const entry = watchers.get(projectId);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import {
@@ -20,7 +20,7 @@ import { useFileCacheStore }      from "@/store/fileCacheStore";
 import { useThemeApplier }        from "@/hooks/useThemeApplier";
 import { usePortStore }           from "@/store/portStore";
 import { getProjectTreeApi }      from "@/apis/projects";
-import { sortTree }               from "@/utils/tree";
+import { sortTree, TreeNodeData } from "@/utils/tree";
 import { useProjectStore }        from "@/store/projectStore";
 
 const TERMINAL_WS_URL = import.meta.env.VITE_WORKER_TERMINAL_URL || "ws://localhost:4000";
@@ -47,13 +47,15 @@ const ProjectPlayground = () => {
     const [projectName,     setProjectName]     = useState(project?.name || "");
     const [loading,         setLoading]         = useState(true);
 
+    // Keep refs so the beforeunload handler can access latest values
+    const wsRef        = useRef<WebSocket | null>(null);
+    const projectIdRef = useRef<string | undefined>(projectId);
+    projectIdRef.current = projectId;
+
     useEffect(() => {
         if (!projectId) { navigate("/"); return; }
         if (!localStorage.getItem("token")) { navigate("/login"); return; }
 
-        // ── Reset all stores when switching projects ───────────────────────
-        // This prevents file cache / open tabs from the previous project
-        // bleeding into the new one when the user opens multiple tabs.
         resetForProject(projectId);
         resetTabs();
         resetCache();
@@ -70,10 +72,14 @@ const ProjectPlayground = () => {
                 setProjectName(resolvedName);
                 setTemplate(resolvedTemplate);
 
-                if (data?.tree) {
-                    const sorted      = sortTree(data.tree);
-                    const sandboxNode = sorted.children?.[0] ?? sorted;
-                    setTreeStructure(sandboxNode);
+                if (data?.tree && typeof data.tree === "object") {
+                    try {
+                        const sorted      = sortTree(data.tree as TreeNodeData);
+                        const sandboxNode = sorted.children?.[0] ?? sorted;
+                        setTreeStructure(sandboxNode);
+                    } catch (e) {
+                        console.warn("[tree] sortTree failed:", e);
+                    }
                 }
 
                 // ── Editor socket ─────────────────────────────────────────
@@ -86,8 +92,9 @@ const ProjectPlayground = () => {
                     console.log("[editor socket] connected");
                     socket!.emit("GET_PORT", { containerName: `project-${projectId}` });
                 });
-                socket.on("disconnect", () => console.log("[editor socket] disconnected"));
-                socket.on("GET_PORT_SUCCESS", ({ port: p }: { port: number }) => {
+                socket.on("disconnect", (reason) => console.log("[editor socket] disconnected:", reason));
+                socket.on("connect_error", (err) => console.error("[editor socket] error:", err.message));
+                socket.on("GET_PORT_SUCCESS", ({ port: p }: { port: number | null }) => {
                     if (p) setPort(p);
                 });
 
@@ -96,9 +103,11 @@ const ProjectPlayground = () => {
                 // ── Terminal WebSocket ────────────────────────────────────
                 const wsUrl = `${TERMINAL_WS_URL}/terminal?projectId=${encodeURIComponent(projectId)}&template=${encodeURIComponent(resolvedTemplate)}&name=${encodeURIComponent(resolvedName)}`;
                 ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+
                 ws.onopen  = () => console.log("[terminal ws] connected");
                 ws.onerror = (e) => console.error("[terminal ws] error", e);
-                ws.onclose = () => console.log("[terminal ws] closed");
+                ws.onclose = (e) => console.log("[terminal ws] closed — code:", e.code);
 
                 ws.addEventListener("message", (e) => {
                     try {
@@ -112,9 +121,30 @@ const ProjectPlayground = () => {
             .catch(console.error)
             .finally(() => setLoading(false));
 
+        // ── beforeunload: tell server to remove container immediately ─────
+        // This fires when the browser tab is closed or the page hard-reloads.
+        const handleBeforeUnload = () => {
+            const pid = projectIdRef.current;
+            const currentWs = wsRef.current;
+            if (currentWs && currentWs.readyState === WebSocket.OPEN && pid) {
+                // Send close-now message — server removes container immediately
+                try {
+                    currentWs.send(JSON.stringify({ type: "close-now", projectId: pid }));
+                } catch {}
+            }
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
         return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+
+            // React cleanup (navigating away via React Router):
+            // Don't send close-now here — server uses a 2-minute timer so the
+            // user can navigate back and reconnect to the same container.
             socket?.disconnect();
             ws?.close();
+            wsRef.current = null;
             clearEditor();
             clearTerminal();
             setPort(null);
@@ -148,14 +178,12 @@ const ProjectPlayground = () => {
                     <div className="w-[48px] min-w-[48px] flex flex-col items-center py-2 gap-1"
                         style={{ background: "#333333", borderRight: "1px solid #252526" }} />
                 )}
-
                 {sidebarOpen && (
                     <div className="w-60 min-w-[200px] overflow-hidden"
                         style={{ background: "#252526", borderRight: "1px solid #1e1e1e" }}>
                         <FileExplorer />
                     </div>
                 )}
-
                 <div className="flex-1 flex overflow-hidden">
                     <div className="flex-1 flex flex-col overflow-hidden">
                         {terminalVisible ? (
@@ -172,7 +200,6 @@ const ProjectPlayground = () => {
                             <CodeEditor />
                         )}
                     </div>
-
                     {browserOpen && (
                         <div className="w-[420px] min-w-[300px]" style={{ borderLeft: "1px solid #252526" }}>
                             <BrowserPreview port={port} onClose={() => setBrowserOpen(false)} />

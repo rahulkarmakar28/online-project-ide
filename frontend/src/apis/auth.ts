@@ -6,12 +6,13 @@ export interface AuthPayload {
     name?:    string;
 }
 
+// FIX: backend returns { data: { token, user } } not { data: { accessToken, user } }
 export interface AuthResponse {
     success: boolean;
     message: string;
     data: {
-        user:        { id: string; email: string; name?: string; createdAt: string };
-        accessToken: string;
+        user:  { id: string; email: string; name?: string; createdAt: string };
+        token: string;  // ← was "accessToken" — doesn't match what backend sends
     };
 }
 

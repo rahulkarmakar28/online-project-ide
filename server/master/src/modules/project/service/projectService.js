@@ -10,7 +10,10 @@ import { AppError } from "../../../shared/utils/errorHandler.js";
 
 const __filename    = fileURLToPath(import.meta.url);
 const __dirname     = path.dirname(__filename);
-const PROJECTS_ROOT = path.resolve(__dirname, "../../../../../", "projects");
+// const PROJECTS_ROOT =
+//     process.env.PROJECTS_DIR || "/app/projects";
+export const PROJECTS_ROOT =
+    process.env.PROJECTS_DIR || path.resolve(process.cwd(), "projects");
 
 export const createProjectService = async ({ userId, template, name }) => {
     if (!TEMPLATE_NAMES.includes(template)) {

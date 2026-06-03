@@ -1,21 +1,7 @@
 version: "3.9"
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  CloudIDE — docker-compose.yml
-#
-#  Services:  db · master · worker · frontend
-#
-#  Quick start:
-#    1. cp server/master/.env.example  server/master/.env
-#    2. docker compose up --build
-#
-#  Before first run — build sandbox images on the host:
-#    cd server/worker && bash build-images.sh
-# ─────────────────────────────────────────────────────────────────────────────
-
 volumes:
   postgres_data:
-  projects_data:      # shared between master (scaffold) and worker (mount into containers)
 
 networks:
   ide_net:
@@ -23,7 +9,6 @@ networks:
 
 services:
 
-  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -43,7 +28,6 @@ services:
       timeout:  5s
       retries:  10
 
-  # ── Master (REST API + Auth) ────────────────────────────────────────────────
   master:
     build:
       context:    ./server/master
@@ -52,22 +36,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      PORT:                   3000
-      DATABASE_URL:           postgresql://johndoe:randompassword@db:5432/mydb?schema=public
-      JWT_SECRET:             ${JWT_SECRET:-changeme_access_secret_32chars_min}
-      JWT_EXPIRES_IN:         ${JWT_EXPIRES_IN:-1d}
-      JWT_REFRESH_SECRET:     ${JWT_REFRESH_SECRET:-changeme_refresh_secret_32chars_min}
-      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
-      FRONTEND_URL:           ${FRONTEND_URL:-http://localhost:5173}
+    env_file:
+      - ./server/master/.env.docker
     volumes:
-      - projects_data:/app/projects
+      - ./server/projects:/app/projects
     ports:
       - "3000:3000"
     networks:
       - ide_net
 
-  # ── Worker (Terminal WS + Editor socket) ───────────────────────────────────
   worker:
     build:
       context:    ./server/worker
@@ -75,17 +52,14 @@ services:
     restart: unless-stopped
     depends_on:
       - master
+    env_file:
+      - ./server/worker/.env.docker
+    privileged: true
     environment:
-      TERMINAL_PORT: 4000
-      EDITOR_PORT:   5000
-      SANDBOX_MODE:  docker
-      # Worker needs to reach Docker on the host to spawn language containers.
-      # On Linux:   /var/run/docker.sock (default)
-      # On Windows: //./pipe/docker_engine
-      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+      DOCKER_HOST:       unix:///var/run/docker.sock
+      HOST_PROJECTS_DIR: ${PWD}/projects
     volumes:
-      - projects_data:/app/projects
-      # Mount Docker socket so worker can create/start sandbox containers
+      - ./server/projects:/app/projects
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "4000:4000"
@@ -93,20 +67,21 @@ services:
     networks:
       - ide_net
 
-  # ── Frontend (Vite dev server) ──────────────────────────────────────────────
   frontend:
     build:
       context:    ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL:             http://localhost:3000
+        VITE_WORKER_TERMINAL_URL: ws://localhost:4000
+        VITE_WORKER_EDITOR_URL:   http://localhost:5000
     restart: unless-stopped
     depends_on:
       - master
       - worker
-    environment:
-      VITE_API_URL:             http://localhost:3000
-      VITE_WORKER_TERMINAL_URL: ws://localhost:4000
-      VITE_WORKER_EDITOR_URL:   http://localhost:5000
+    env_file:
+      - ./frontend/.env.docker
     ports:
-      - "5173:5173"
+      - "8080:8080"
     networks:
       - ide_net

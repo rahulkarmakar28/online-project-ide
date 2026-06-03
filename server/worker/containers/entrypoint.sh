@@ -4,35 +4,53 @@ set -e
 HOST_UID=${HOST_UID:-1000}
 HOST_GID=${HOST_GID:-1000}
 
-# Match sandbox uid/gid to host user so bind-mounted files are writable
-groupmod -o -g "$HOST_GID" sandbox 2>/dev/null || true
-usermod  -o -u "$HOST_UID" -g "$HOST_GID" sandbox 2>/dev/null || true
+# Create/update sandbox group
+if ! getent group sandbox >/dev/null 2>&1; then
+    groupadd -g "$HOST_GID" sandbox
+else
+    groupmod -o -g "$HOST_GID" sandbox || true
+fi
 
-# Rewrite /etc/passwd so bash never shows "I have no name!"
-sed -i "/^sandbox:/d" /etc/passwd 2>/dev/null || true
-echo "sandbox:x:${HOST_UID}:${HOST_GID}:sandbox:/home/sandbox:/bin/bash" >> /etc/passwd
-sed -i "/^sandbox:/d" /etc/group 2>/dev/null || true
-echo "sandbox:x:${HOST_GID}:" >> /etc/group
+# Create/update sandbox user
+if ! id sandbox >/dev/null 2>&1; then
+    useradd -u "$HOST_UID" -g "$HOST_GID" -ms /bin/bash sandbox
+else
+    usermod -o -u "$HOST_UID" -g "$HOST_GID" sandbox || true
+fi
 
-# Fix ownership
-mkdir -p /home/sandbox /workspace
-chown "${HOST_UID}:${HOST_GID}" /home/sandbox
-chown -R "${HOST_UID}:${HOST_GID}" /workspace 2>/dev/null || true
-chmod -R u+rwX /workspace 2>/dev/null || true
+# Ensure directories exist and are writable
+mkdir -p /workspace /home/sandbox
+chown -R "$HOST_UID:$HOST_GID" /workspace  || true
+chown -R "$HOST_UID:$HOST_GID" /home/sandbox || true
+chmod -R u+rwX /workspace || true
 
-# Write .bashrc via heredoc — backslashes are never interpreted here,
-# which fixes the random m/n/r/v prefix caused by Dockerfile echo
-cat > /home/sandbox/.bashrc << 'RCEOF'
+# Write .bashrc
+# KEY FIX: \[ and \] in PS1 only work when bash *evaluates* the prompt string.
+# When stored as literal characters in .bashrc and read with --rcfile they
+# appear as '/' and ']' in the terminal output.
+# Solution: use \001 (SOH) and \002 (STX) which are the actual bytes that
+# bash translates \[ and \] into. We write them with printf hex escapes.
+RESET=$(printf '\001\033[0m\002')
+GREEN=$(printf '\001\033[0;32m\002')
+CYAN=$(printf '\001\033[0;36m\002')
+
+cat > /home/sandbox/.bashrc << EOF
 export TERM=xterm-256color
 export COLORTERM=truecolor
 export HOME=/home/sandbox
-PS1='\001\e[0;32m\002cloudide\001\e[0m\002@\001\e[0;36m\002\W\001\e[0m\002 \$ '
-export PS1
+
+# Prompt: cloudide@<folder> \$
+# Uses \001..\002 (SOH/STX) to wrap non-printing escape sequences so
+# readline cursor tracking stays correct on long commands.
+PS1='${GREEN}cloudide${RESET}@${CYAN}\W${RESET} \$ '
+
 alias ls='ls --color=auto'
 alias ll='ls -la'
 alias grep='grep --color=auto'
-RCEOF
+EOF
 
-chown "${HOST_UID}:${HOST_GID}" /home/sandbox/.bashrc
+chown "$HOST_UID:$HOST_GID" /home/sandbox/.bashrc
+
+cd /workspace
 
 exec gosu sandbox bash --rcfile /home/sandbox/.bashrc

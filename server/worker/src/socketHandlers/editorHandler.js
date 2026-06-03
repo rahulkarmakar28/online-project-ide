@@ -1,29 +1,26 @@
 import fs from "fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const PROJECTS_DIR = path.resolve(
+    process.env.PROJECTS_DIR || path.join(process.cwd(), "../projects")
+);
 
-const PROJECTS_DIR = path.resolve(__dirname, "../../..", "projects");
-
+console.log(`[editorHandler] PROJECTS_DIR = ${PROJECTS_DIR}`);
 
 const unlockProject = async (projectId) => {
     const projectRoot = path.join(PROJECTS_DIR, projectId);
     try {
-        await execFileAsync("chmod", ["-R", "777", projectRoot]);
-    } catch {
-        // best-effort — real error will surface from the fs operation below
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(execFile);
+        await execAsync("chmod", ["-R", "777", projectRoot]);
+    } catch(e) {
+        console.log(e);
     }
 };
 
 export const handleEditorSocketEvents = (socket, editorNamespace, projectId) => {
-
-    // ── File operations ───────────────────────────────────────────────────────
 
     socket.on("WriteFile", async ({ data, pathToFileOrFolder }) => {
         try {
@@ -35,22 +32,21 @@ export const handleEditorSocketEvents = (socket, editorNamespace, projectId) => 
                 value: data,
             });
         } catch (error) {
-            console.log("Error writing the file", error);
-            editorNamespace.to(projectId).emit("ERROR", { data: "Error writing the file" });
+            console.error("Error writing the file", error.message);
+            editorNamespace.to(projectId).emit("ERROR", { data: "Error writing the file: " + error.message });
         }
     });
 
     socket.on("CreateFile", async ({ pathToFileOrFolder }) => {
         try {
-            try {
-                await fs.access(pathToFileOrFolder);
-                return socket.emit("ERROR", { data: "File already exists" });
-            } catch {}
+            try { await fs.access(pathToFileOrFolder); return socket.emit("ERROR", { data: "File already exists" }); } catch {}
+            await fs.mkdir(path.dirname(pathToFileOrFolder), { recursive: true });
             await fs.writeFile(pathToFileOrFolder, "");
             editorNamespace.to(projectId).emit("CreateFileSuccess", { path: pathToFileOrFolder });
+            editorNamespace.to(projectId).emit("FileSystemChange", { event: "add", path: pathToFileOrFolder });
         } catch (error) {
-            console.log("Error creating file", error);
-            socket.emit("ERROR", { data: "Error creating file" });
+            console.error("Error creating file", error.message);
+            socket.emit("ERROR", { data: "Error creating file: " + error.message });
         }
     });
 
@@ -63,7 +59,7 @@ export const handleEditorSocketEvents = (socket, editorNamespace, projectId) => 
                 path:  pathToFileOrFolder,
             });
         } catch (error) {
-            console.log("Error Reading the file", error);
+            console.error("Error Reading the file", error.message);
             socket.emit("ERROR", { data: error.message || "Error Reading the file" });
         }
     });
@@ -73,25 +69,22 @@ export const handleEditorSocketEvents = (socket, editorNamespace, projectId) => 
             await unlockProject(projectId);
             await fs.unlink(pathToFileOrFolder);
             editorNamespace.to(projectId).emit("DeleteFileSuccess", { data: "File Deleted Successfully" });
+            editorNamespace.to(projectId).emit("FileSystemChange", { event: "unlink", path: pathToFileOrFolder });
         } catch (error) {
-            console.log("Error Deleting the file", error);
-            editorNamespace.to(projectId).emit("ERROR", { data: "Error Deleting the file" });
+            console.error("Error Deleting the file", error.message);
+            editorNamespace.to(projectId).emit("ERROR", { data: "Error Deleting the file: " + error.message });
         }
     });
 
-    // ── Folder operations ─────────────────────────────────────────────────────
-
     socket.on("CreateFolder", async ({ pathToFileOrFolder }) => {
         try {
-            try {
-                await fs.access(pathToFileOrFolder);
-                return socket.emit("ERROR", { data: "Folder already exists" });
-            } catch {}
+            try { await fs.access(pathToFileOrFolder); return socket.emit("ERROR", { data: "Folder already exists" }); } catch {}
             await fs.mkdir(pathToFileOrFolder, { recursive: true });
             editorNamespace.to(projectId).emit("CreateFolderSuccess", { path: pathToFileOrFolder });
+            editorNamespace.to(projectId).emit("FileSystemChange", { event: "addDir", path: pathToFileOrFolder });
         } catch (error) {
-            console.log("Error creating folder", error);
-            socket.emit("ERROR", { data: "Error creating folder" });
+            console.error("Error creating folder", error.message);
+            socket.emit("ERROR", { data: "Error creating folder: " + error.message });
         }
     });
 
@@ -100,24 +93,23 @@ export const handleEditorSocketEvents = (socket, editorNamespace, projectId) => 
             await unlockProject(projectId);
             await fs.rm(pathToFileOrFolder, { recursive: true, force: true });
             editorNamespace.to(projectId).emit("DeleteFolderSuccess", { data: "Folder Deleted Successfully" });
+            editorNamespace.to(projectId).emit("FileSystemChange", { event: "unlinkDir", path: pathToFileOrFolder });
         } catch (error) {
-            console.log("Error Deleting the Folder", error);
-            editorNamespace.to(projectId).emit("ERROR", { data: "Error Deleting the Folder" });
+            console.error("Error Deleting the Folder", error.message);
+            editorNamespace.to(projectId).emit("ERROR", { data: "Error Deleting the Folder: " + error.message });
         }
     });
 
     socket.on("Rename", async ({ oldPath, newPath }) => {
         try {
-            try {
-                await fs.access(newPath);
-                return socket.emit("ERROR", { data: "File/Folder already exists" });
-            } catch {}
+            try { await fs.access(newPath); return socket.emit("ERROR", { data: "File/Folder already exists" }); } catch {}
             await unlockProject(projectId);
             await fs.rename(oldPath, newPath);
             editorNamespace.to(projectId).emit("RenameSuccess", { oldPath, newPath });
+            editorNamespace.to(projectId).emit("FileSystemChange", { event: "rename", path: newPath });
         } catch (error) {
-            console.log("Rename error", error);
-            editorNamespace.to(projectId).emit("ERROR", { data: "Rename failed" });
+            console.error("Rename error", error.message);
+            editorNamespace.to(projectId).emit("ERROR", { data: "Rename failed: " + error.message });
         }
     });
 };

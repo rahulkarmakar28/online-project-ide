@@ -7,16 +7,12 @@ export const TEMPLATE_IMAGE = {
     "html-css-js": "online-editor-node",
     "nodejs":      "online-editor-node",
     "hono":        "online-editor-node",
-
     "python":      "online-editor-python",
     "fastapi":     "online-editor-python",
     "flask":       "online-editor-python",
     "django":      "online-editor-python",
-
     "go":          "online-editor-go",
-
     "rust":        "online-editor-rust",
-
     "java":        "online-editor-jvm",
     "spring-boot": "online-editor-jvm",
 };
