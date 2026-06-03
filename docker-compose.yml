@@ -57,7 +57,7 @@ services:
     privileged: true
     environment:
       DOCKER_HOST:       unix:///var/run/docker.sock
-      HOST_PROJECTS_DIR: ${PWD}/projects
+      HOST_PROJECTS_DIR: ${PWD}/server/projects
     volumes:
       - ./server/projects:/app/projects
       - /var/run/docker.sock:/var/run/docker.sock

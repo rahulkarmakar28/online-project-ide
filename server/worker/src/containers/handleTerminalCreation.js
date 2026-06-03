@@ -104,8 +104,6 @@ export const handleTerminalCreation = async (container, projectName, ws) => {
         stream.on("end",   () => console.log("[terminal] stream ended"));
         stream.on("error", (e) => console.error("[terminal] stream error:", e));
 
-        ws.removeAllListeners("message");
-        ws.removeAllListeners("close");
 
         let inputBuffer = "";
 
