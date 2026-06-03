@@ -4,18 +4,17 @@ const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 const axiosInstance = axios.create({ baseURL: BASE_URL, withCredentials: true });
 
-// ── Attach access token on every request ────────────────────────────────────
+// Attach token on every request
 axiosInstance.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
 });
 
-// ── Auto-refresh on 401 ──────────────────────────────────────────────────────
 let isRefreshing = false;
 let pendingQueue: Array<{
     resolve: (token: string) => void;
-    reject: (err: unknown) => void;
+    reject:  (err: unknown) => void;
 }> = [];
 
 const flushQueue = (error: unknown, token: string | null = null) => {
@@ -49,7 +48,7 @@ axiosInstance.interceptors.response.use(
             }
 
             originalReq._retry = true;
-            isRefreshing = true;
+            isRefreshing        = true;
 
             try {
                 const { data } = await axiosInstance.post(
@@ -57,6 +56,7 @@ axiosInstance.interceptors.response.use(
                     {},
                     { withCredentials: true },
                 );
+                // FIX: backend refresh returns { data: { token } }
                 const newToken: string = data.data.token;
                 localStorage.setItem("token", newToken);
                 axiosInstance.defaults.headers.common.Authorization = `Bearer ${newToken}`;

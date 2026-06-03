@@ -5,10 +5,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash sandbox
-RUN mkdir -p /workspace /home/sandbox
+
+RUN mkdir -p /workspace /home/sandbox && \
+    chown -R sandbox:sandbox /workspace /home/sandbox
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 WORKDIR /workspace
+
 ENTRYPOINT ["/entrypoint.sh"]

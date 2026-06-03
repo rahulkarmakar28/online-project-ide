@@ -1,53 +1,90 @@
 import Docker from "dockerode";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
+import path   from "node:path";
+import fs     from "node:fs";
+import os     from "node:os";
+
 import { TEMPLATE_IMAGE, TEMPLATE_PORTS } from "../utils/constant.js";
 
-export const PROJECTS_DIR = path.resolve(process.cwd(), "../projects");
+// PROJECTS_DIR — path as seen by THIS (worker) container — used for fs operations
+export const PROJECTS_DIR = path.resolve(
+    process.env.PROJECTS_DIR || path.join(process.cwd(), "../projects")
+);
+
+// HOST_PROJECTS_DIR — path as seen by the HOST machine — used for Docker bind mounts.
+// Docker bind mounts always reference the HOST filesystem, not container paths.
+// When running in Docker Compose with ./projects:/app/projects, the host path is
+// the absolute path of ./projects on the host machine.
+// Set HOST_PROJECTS_DIR in docker-compose to the host-side absolute path.
+const HOST_PROJECTS_DIR = path.resolve(
+    process.env.HOST_PROJECTS_DIR || PROJECTS_DIR
+);
 
 const getDockerClient = () => {
-    if (process.env.DOCKER_HOST) {
-        const h = process.env.DOCKER_HOST;
-        if (h.startsWith("tcp://") || h.startsWith("http://")) {
-            const url = new URL(h.replace("tcp://", "http://"));
-            return new Docker({ host: url.hostname, port: parseInt(url.port) || 2375, protocol: "http" });
-        }
-        return new Docker({ socketPath: h.replace(/^(unix|npipe):\/\//, "") });
+    const host = (process.env.DOCKER_HOST || "").trim();
+    if (host.startsWith("tcp://") || host.startsWith("http://")) {
+        const url = new URL(host.replace("tcp://", "http://"));
+        return new Docker({ host: url.hostname, port: parseInt(url.port) || 2375, protocol: "http" });
     }
-    if (os.platform() === "win32") {
-        return new Docker({ socketPath: "//./pipe/docker_engine" });
+    if (host) {
+        const socketPath = host.replace("unix://", "").replace("npipe://", "");
+        console.log(`[docker] Socket from DOCKER_HOST: ${socketPath}`);
+        return new Docker({ socketPath });
     }
-    const uid = process.getuid?.() ?? 1000;
+    if (os.platform() === "win32") return new Docker({ socketPath: "//./pipe/docker_engine" });
+    const uid = process.getuid?.() ?? 0;
     const xdg = process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`;
-    const candidates = [
-        "/var/run/docker.sock",
-        `${xdg}/docker.sock`,
-        `${xdg}/podman/podman.sock`,
-        "/run/podman/podman.sock",
-    ];
+    const candidates = ["/var/run/docker.sock", `${xdg}/docker.sock`, `${xdg}/podman/podman.sock`, "/run/podman/podman.sock"];
     for (const s of candidates) {
-        if (fs.existsSync(s)) { console.log(`[docker] socket: ${s}`); return new Docker({ socketPath: s }); }
+        if (fs.existsSync(s)) { console.log(`[docker] Auto-detected: ${s}`); return new Docker({ socketPath: s }); }
     }
     return new Docker({ socketPath: "/var/run/docker.sock" });
 };
 
 const docker = getDockerClient();
-const containerRegistry = new Map();
 
+docker.ping()
+    .then(() => console.log("[docker] ✓ Connected"))
+    .catch((err) => {
+        console.error("[docker] ✗ Cannot connect:", err.message);
+        console.error(`[docker]   DOCKER_HOST=${process.env.DOCKER_HOST || "(not set)"}`);
+        console.error(`[docker]   PROJECTS_DIR=${PROJECTS_DIR}`);
+        console.error(`[docker]   HOST_PROJECTS_DIR=${HOST_PROJECTS_DIR}`);
+    });
+
+const containerRegistry = new Map();
 export const getContainerPort = (projectId) => containerRegistry.get(projectId)?.port ?? null;
 
 export const handleContainerCreate = async (projectId, template, projectName) => {
     try {
-        const internalPort = TEMPLATE_PORTS[template] || 3000;
+        const internalPort = TEMPLATE_PORTS[template];
         const image        = TEMPLATE_IMAGE[template];
-        if (!image) { console.error(`[container] No image for template: ${template}`); return null; }
 
-        console.log(`[container] projectId=${projectId} template=${template} image=${image} port=${internalPort}`);
+        console.log("[container] ─────────────────────────────");
+        console.log(`[container] projectId=${projectId} template=${template}`);
+        console.log(`[container] image=${image ?? "NOT FOUND"} port=${internalPort ?? "NOT FOUND"}`);
+        console.log(`[container] PROJECTS_DIR=${PROJECTS_DIR}`);
+        console.log(`[container] HOST_PROJECTS_DIR=${HOST_PROJECTS_DIR}`);
 
+        if (!image) {
+            console.error(`[container] ✗ No image for "${template}". Valid: ${Object.keys(TEMPLATE_IMAGE).join(", ")}`);
+            return null;
+        }
+        if (!internalPort) {
+            console.error(`[container] ✗ No port for "${template}"`);
+            return null;
+        }
+
+        try {
+            await docker.getImage(image).inspect();
+            console.log(`[container] ✓ Image "${image}" found`);
+        } catch {
+            console.error(`[container] ✗ Image "${image}" NOT found. Run: bash build-images.sh`);
+            return null;
+        }
+
+        // Reuse existing
         const all      = await docker.listContainers({ all: true });
-        const existing = all.find(c => c.Names.some(n => n === `/project-${projectId}`));
-
+        const existing = all.find((c) => c.Names.some((n) => n === `/project-${projectId}`));
         if (existing) {
             const container = docker.getContainer(existing.Id);
             const info      = await container.inspect();
@@ -55,15 +92,21 @@ export const handleContainerCreate = async (projectId, template, projectName) =>
             const fresh    = await container.inspect();
             const hostPort = fresh.NetworkSettings.Ports[`${internalPort}/tcp`]?.[0]?.HostPort;
             containerRegistry.set(projectId, { port: hostPort, template });
+            console.log(`[container] ✓ Reused → localhost:${hostPort}`);
             return container;
         }
 
-        const projectPath     = path.join(PROJECTS_DIR, projectId);
-        const fullProjectPath = path.join(projectPath, projectName);
-        fs.mkdirSync(fullProjectPath, { recursive: true });
-
-        // chmod 775 before mounting so vite can write .timestamp files
+        // Create project directory on worker filesystem
+        const projectPath = path.join(PROJECTS_DIR, projectId);
+        fs.mkdirSync(projectPath, { recursive: true });
         try { fs.chmodSync(projectPath, 0o777); } catch {}
+
+        // HOST_PROJECTS_DIR/{projectId} on host → /workspace in sandbox container
+        const hostProjectPath = path.join(HOST_PROJECTS_DIR, projectId);
+        const bindMount       = `${hostProjectPath}:/workspace:z`;
+
+        console.log(`[container] Bind: ${bindMount}`);
+        console.log(`[container] WorkingDir: /workspace/${projectName}`);
 
         const container = await docker.createContainer({
             Image:        image,
@@ -73,40 +116,37 @@ export const handleContainerCreate = async (projectId, template, projectName) =>
             AttachStdin:  true,
             AttachStdout: true,
             AttachStderr: true,
-            Env: [
-                "HOST=0.0.0.0",
-                `HOST_UID=${process.getuid?.() ?? 1000}`,
-                `HOST_GID=${process.getgid?.() ?? 1000}`,
-            ],
+            Env:          ["HOST=0.0.0.0", "HOST_UID=1000", "HOST_GID=1000"],
             ExposedPorts: { [`${internalPort}/tcp`]: {} },
             HostConfig: {
-                AutoRemove: false,
+                AutoRemove:   false,
                 PortBindings: { [`${internalPort}/tcp`]: [{ HostIp: "0.0.0.0", HostPort: "" }] },
-                Binds: [`${projectPath}:/workspace:z`],
+                Binds:        [bindMount],
             },
             WorkingDir: `/workspace/${projectName}`,
         });
 
         await container.start();
 
-        // chown inside container so sandbox user owns everything including
-        // files created by Node scaffold running as the host user
-        const exec = await container.exec({
-            Cmd: ["bash", "-c", "chown -R sandbox:sandbox /workspace && chmod -R u+rwX /workspace"],
-            AttachStdout: true,
-            AttachStderr: true,
-        });
-        await exec.start({});
+        try {
+            const exec = await container.exec({
+                Cmd: ["bash", "-c", "chown -R 1000:1000 /workspace && chmod -R u+rwX /workspace"],
+                AttachStdout: true, AttachStderr: true,
+            });
+            await exec.start({});
+        } catch (e) {
+            console.warn("[container] chown warning:", e.message);
+        }
 
         const info     = await container.inspect();
         const hostPort = info.NetworkSettings.Ports[`${internalPort}/tcp`]?.[0]?.HostPort;
         containerRegistry.set(projectId, { port: hostPort, template });
-
-        console.log(`[container] started ${projectId} → localhost:${hostPort} (internal:${internalPort})`);
+        console.log(`[container] ✓ Ready → localhost:${hostPort} (container:${internalPort})`);
         return container;
 
     } catch (err) {
-        console.error("[container error]", err.message);
+        console.error("[container] ✗ Fatal:", err.message);
+        if (err.json) console.error("[container]   Docker API:", JSON.stringify(err.json));
         return null;
     }
 };

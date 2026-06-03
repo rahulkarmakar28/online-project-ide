@@ -13,12 +13,12 @@ build() {
     $BUILDER build -t "$tag" -f "$DIR/$file" "$DIR"
 }
 
-build "sandbox-node"   "Containerfile.node"
-build "sandbox-python" "Containerfile.python"
-build "sandbox-go"     "Containerfile.go"
-build "sandbox-jvm"    "Containerfile.jvm"
-build "sandbox-rust"   "Containerfile.rust"
+build "online-editor-node"   "Containerfile.node"
+build "online-editor-python" "Containerfile.python"
+build "online-editor-go"     "Containerfile.go"
+build "online-editor-jvm"    "Containerfile.jvm"
+build "online-editor-rust"   "Containerfile.rust"
 
 echo ""
 echo "All sandbox images built."
-$BUILDER images | grep "sandbox-"
+$BUILDER images | grep "online-editor-"
