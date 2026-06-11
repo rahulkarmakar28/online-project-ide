@@ -13,9 +13,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     johndoe
+      POSTGRES_USER: johndoe
       POSTGRES_PASSWORD: randompassword
-      POSTGRES_DB:       mydb
+      POSTGRES_DB: mydb
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -23,14 +23,28 @@ services:
     networks:
       - ide_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U johndoe -d mydb"]
+      test: [ "CMD-SHELL", "pg_isready -U johndoe -d mydb" ]
       interval: 5s
-      timeout:  5s
-      retries:  10
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - ide_net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
 
   master:
     build:
-      context:    ./server/master
+      context: ./server/master
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
@@ -47,17 +61,21 @@ services:
 
   worker:
     build:
-      context:    ./server/worker
+      context: ./server/worker
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      - master
+      redis:
+        condition: service_healthy
+      master:
+        condition: service_started
     env_file:
       - ./server/worker/.env.docker
     privileged: true
     environment:
-      DOCKER_HOST:       unix:///var/run/docker.sock
+      DOCKER_HOST: unix:///var/run/docker.sock
       HOST_PROJECTS_DIR: ${PWD}/server/projects
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./server/projects:/app/projects
       - /var/run/docker.sock:/var/run/docker.sock
@@ -69,12 +87,12 @@ services:
 
   frontend:
     build:
-      context:    ./frontend
+      context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL:             http://localhost:3000
+        VITE_API_URL: http://localhost:3000
         VITE_WORKER_TERMINAL_URL: ws://localhost:4000
-        VITE_WORKER_EDITOR_URL:   http://localhost:5000
+        VITE_WORKER_EDITOR_URL: http://localhost:5000
     restart: unless-stopped
     depends_on:
       - master
@@ -85,3 +103,4 @@ services:
       - "8080:8080"
     networks:
       - ide_net
+      
